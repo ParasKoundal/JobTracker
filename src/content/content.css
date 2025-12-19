@@ -1,0 +1,109 @@
+/* Job Tracker Content Script Styles - Swiss Minimalism */
+
+/* Minimalist Status Badge */
+.job-tracker-status-badge {
+    position: fixed !important;
+    top: 16px !important;
+    right: 16px !important;
+    z-index: 2147483647 !important;
+    min-width: 120px !important;
+    height: 40px !important;
+    padding: 0 16px !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    animation: job-tracker-fade-in 0.2s ease !important;
+    box-shadow: none !important;
+    border: 2px solid transparent !important;
+    font-family: 'Helvetica Neue', 'Arial', sans-serif !important;
+    transition: border-color 0.2s ease !important;
+    margin: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateX(0) !important;
+}
+
+.job-tracker-status-badge[data-theme="dark"] {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.job-tracker-status-badge:hover {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.job-tracker-badge-content {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.job-tracker-badge-text {
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    white-space: nowrap !important;
+}
+
+@keyframes job-tracker-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Minimalist Track Button */
+.job-tracker-float-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 2147483646;
+    width: 56px;
+    height: 56px;
+    border-radius: 0;
+    background: #000000;
+    border: 2px solid #000000;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
+    transition: all 0.2s ease;
+}
+
+.job-tracker-float-btn:hover {
+    background: #ffffff;
+    color: #000000;
+    border-color: #000000;
+}
+
+.job-tracker-float-btn:active {
+    transform: scale(0.95);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .job-tracker-status-badge {
+        top: 12px;
+        right: 12px;
+        min-width: 120px;
+        height: 40px;
+        padding: 0 16px;
+    }
+
+    .job-tracker-badge-text {
+        font-size: 11px;
+    }
+
+    .job-tracker-float-btn {
+        bottom: 16px;
+        right: 16px;
+        width: 48px;
+        height: 48px;
+    }
+}
