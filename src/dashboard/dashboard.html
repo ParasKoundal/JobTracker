@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Tracker Dashboard</title>
+    <link rel="stylesheet" href="dashboard-minimal.css">
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <path d="M16 4L20 12L28 13L22 19L24 28L16 23L8 28L10 19L4 13L12 12L16 4Z" fill="currentColor"
+                            stroke="currentColor" stroke-width="2" />
+                    </svg>
+                    <h1>Job Tracker</h1>
+                    <button id="toggleTheme" class="theme-toggle" title="Toggle Theme">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" id="themeIcon">
+                            <circle cx="10" cy="10" r="4" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9L4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="header-stats">
+                    <div class="stat">
+                        <span class="stat-value" id="totalJobs">0</span>
+                        <span class="stat-label">Total</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="appliedJobs">0</span>
+                        <span class="stat-label">Applied</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="interviewingJobs">0</span>
+                        <span class="stat-label">Interviewing</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="dashboard-content">
+            <div class="controls">
+                <div class="search-box">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="2" />
+                        <path d="M12 12L17 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Search by company, title, or location...">
+                </div>
+
+                <div class="filters">
+                    <select id="statusFilter">
+                        <option value="all">All Statuses</option>
+                        <option value="interested">Interested</option>
+                        <option value="applied">Applied</option>
+                        <option value="interviewing">Interviewing</option>
+                        <option value="offer">Offer</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+
+                    <select id="sortBy">
+                        <option value="updated_desc">Recently Updated</option>
+                        <option value="created_desc">Recently Added</option>
+                        <option value="applied_desc">Recently Applied</option>
+                        <option value="company_asc">Company A-Z</option>
+                        <option value="title_asc">Title A-Z</option>
+                    </select>
+
+                    <button id="exportBtn" class="btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 10V3M8 10L11 7M8 10L5 7" stroke="currentColor" stroke-width="1.5"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M3 13H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                        </svg>
+                        Export CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="jobs-table" id="jobsTable">
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Applied</th>
+                            <th>Last Seen</th>
+                            <th>Source</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobsTableBody">
+                        <!-- Jobs will be inserted here -->
+                    </tbody>
+                </table>
+
+                <div id="emptyState" class="empty-state" style="display: none;">
+                    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                        <path d="M32 8L40 24L56 26L44 38L48 56L32 46L16 56L20 38L8 26L24 24L32 8Z" stroke="currentColor"
+                            stroke-width="3" fill="none" />
+                    </svg>
+                    <h2>No jobs tracked yet</h2>
+                    <p>Start tracking jobs by clicking the extension icon on any job posting page.</p>
+                </div>
+
+                <div id="noResults" class="empty-state" style="display: none;">
+                    <h2>No jobs found</h2>
+                    <p>Try adjusting your search or filters.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Job</h2>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+
+            <form id="editForm" class="modal-form">
+                <input type="hidden" id="editJobKey">
+
+                <div class="form-group">
+                    <label for="editCompany">Company *</label>
+                    <input type="text" id="editCompany" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="editTitle">Job Title *</label>
+                    <input type="text" id="editTitle" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="editLocation">Location</label>
+                    <input type="text" id="editLocation">
+                </div>
+
+                <div class="form-group">
+                    <label for="editStatus">Status *</label>
+                    <select id="editStatus" required>
+                        <option value="interested">Interested</option>
+                        <option value="applied">Applied</option>
+                        <option value="interviewing">Interviewing</option>
+                        <option value="offer">Offer</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="editNotes">Notes</label>
+                    <textarea id="editNotes" rows="3"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" id="cancelEdit">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="dashboard.js"></script>
+</body>
+
+</html>
