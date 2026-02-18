@@ -1,0 +1,302 @@
+/* Popup Styles - Swiss Design Inspired */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    width: 380px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    color: #ffffff;
+}
+
+.popup-container {
+    background: linear-gradient(135deg, rgba(0,0,0,0.7) 0%, rgba(26,26,46,0.85) 100%);
+    backdrop-filter: blur(10px);
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.popup-header {
+    background: linear-gradient(90deg, rgba(102,126,234,0.3) 0%, rgba(118,75,162,0.3) 100%);
+    color: white;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.popup-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.popup-logo svg {
+    color: white;
+}
+
+.popup-logo h1 {
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+}
+
+.icon-btn {
+    background: transparent;
+    border: 1px solid #333333;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.icon-btn:hover {
+    background: #1a1a1a;
+    border-color: #ffffff;
+}
+
+/* Current Status */
+.current-status {
+    background: linear-gradient(90deg, #0f0f0f 0%, #1a1a2e 100%);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #2a2a4e;
+}
+
+.status-indicator {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    width: fit-content;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid;
+}
+
+.status-badge.status-interested {
+    background-color: transparent;
+    color: #999999;
+    border-color: #333333;
+}
+
+.status-badge.status-applied {
+    background-color: transparent;
+    color: #ffffff;
+    border-color: #ffffff;
+}
+
+.status-badge.status-interviewing {
+    background-color: transparent;
+    color: #cccccc;
+    border-color: #666666;
+}
+
+.status-badge.status-offer {
+    background-color: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+}
+
+.status-badge.status-rejected {
+    background-color: transparent;
+    color: #666666;
+    border-color: #333333;
+}
+
+.status-date {
+    font-size: 12px;
+    color: #999999;
+    font-weight: 400;
+}
+
+/* Form */
+.track-form {
+    padding: 20px;
+    flex: 1;
+}
+
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #999999;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #1a1a1a;
+    border-radius: 2px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.15s ease;
+    background: #0f0f0f;
+    color: #ffffff;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #ffffff;
+    background: #000000;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: #666666;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.form-group select {
+    cursor: pointer;
+    background-color: #0f0f0f;
+}
+
+/* Buttons */
+.form-actions {
+    margin-top: 24px;
+}
+
+.btn-primary,
+.btn-secondary {
+    border: none;
+    border-radius: 2px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    border: 1px solid transparent;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    color: #ffffff;
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+.btn-secondary {
+    padding: 8px 16px;
+    background: transparent;
+    color: #ffffff;
+    border: 1px solid #333333;
+}
+
+.btn-secondary:hover {
+    background: #1a1a1a;
+    border-color: #ffffff;
+}
+
+.btn-sm {
+    font-size: 10px;
+    padding: 6px 12px;
+}
+
+/* Success Message */
+.success-message {
+    padding: 20px;
+    text-align: center;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    background: #0a0a0a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Color Settings */
+.color-settings {
+    padding: 20px;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+}
+
+.color-settings h3 {
+    font-size: 12px;
+    font-weight: 600;
+    color: #999999;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.color-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.color-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.color-option label {
+    font-size: 12px;
+    color: #cccccc;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.color-option input[type="color"] {
+    width: 48px;
+    height: 32px;
+    border: 1px solid #1a1a1a;
+    border-radius: 2px;
+    background: #0f0f0f;
+    cursor: pointer;
+}
