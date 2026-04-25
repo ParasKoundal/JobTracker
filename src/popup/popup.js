@@ -214,20 +214,45 @@ async function handleFormSubmit(e) {
 
         // Save page HTML if toggle is on
         const savePageToggle = document.getElementById('savePageToggle');
+        let pageSaveWarning = null;
         if (savePageToggle.checked) {
+            let html = null;
+
+            // Attempt 1: chrome.scripting.executeScript
             try {
                 const results = await chrome.scripting.executeScript({
                     target: { tabId: currentTab.id },
                     func: () => document.documentElement.outerHTML
                 });
                 if (results && results[0] && results[0].result) {
-                    await StorageService.savePageHTML(jobKey, results[0].result);
+                    html = results[0].result;
                 }
             } catch (err) {
-                console.warn('Could not capture page HTML:', err);
-                // Show a brief non-blocking warning so the user knows
-                const msg = err?.message?.includes('QUOTA') ? 'Storage full — page not saved.' : 'Could not save page.';
-                showSaveWarning(msg);
+                console.warn('Job Tracker: scripting.executeScript failed:', err.message);
+            }
+
+            // Attempt 2: fallback via content script message
+            if (!html) {
+                try {
+                    const response = await chrome.tabs.sendMessage(currentTab.id, { action: 'capturePageHTML' });
+                    if (response && response.html) {
+                        html = response.html;
+                    }
+                } catch (err2) {
+                    console.warn('Job Tracker: content script fallback failed:', err2.message);
+                }
+            }
+
+            // Save if we got HTML
+            if (html) {
+                try {
+                    await StorageService.savePageHTML(jobKey, html);
+                } catch (err) {
+                    console.warn('Job Tracker: storage write failed:', err.message);
+                    pageSaveWarning = err?.message?.includes('QUOTA') ? 'Storage full — page not saved.' : 'Could not save page.';
+                }
+            } else {
+                pageSaveWarning = 'Could not capture page — this page may be restricted.';
             }
         }
 
@@ -240,6 +265,11 @@ async function handleFormSubmit(e) {
 
         // Show success message
         showSuccessMessage();
+
+        // Show page save warning if applicable (after success is visible)
+        if (pageSaveWarning) {
+            showSaveWarning(pageSaveWarning);
+        }
 
         // Notify background script about status update
         chrome.runtime.sendMessage({
