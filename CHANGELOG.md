@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.3.1] - 2026-04-25
+
+### Fix: Page Saving Storage Overflow
+
+Fixed a critical bug where local page saving would stop working after saving ~10-50 jobs.
+
+#### Fixed
+- **Storage Quota Overflow**: Page HTML was stored in a single `chrome.storage.local` key (`job_tracker_pages`). Once the 10 MB quota was exceeded, all page saves silently failed.
+- **Migration Crash**: Migration logic could temporarily double storage usage, causing the extension to fail on load.
+
+#### Changed
+- **Per-Job Storage Keys**: Each saved page is now stored under its own key (`job_page_{jobKey}`) instead of one monolithic object. This distributes storage and avoids hitting the quota limit.
+- **Automatic Migration**: Existing saved pages in the old format are automatically migrated to per-job keys on first load. Migration is idempotent and safe to run multiple times.
+- **Error Feedback**: The popup now shows a visible warning if a page save fails, instead of silently swallowing the error.
+- **Dashboard Import**: JSON import now writes pages using per-job keys instead of the old monolithic format.
+
+#### Backward Compatibility
+- Existing saved pages are automatically migrated (no data loss)
+- JSON export/import format is unchanged — old exports still importable
+- Copy-paste between browsers continues to work
+
+#### Modified Files
+- `src/utils/storage.js` — Per-job keys, migration logic, error handling
+- `src/popup/popup.js` — Triggers migration on init, shows save warnings
+- `src/dashboard/dashboard.js` — Triggers migration on init, per-job import
+
 ## [1.3.0] - 2025-02-18
 
 ### Save Page Locally & JSON Import/Export

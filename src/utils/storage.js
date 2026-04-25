@@ -4,7 +4,8 @@
  */
 
 const STORAGE_KEY = 'job_tracker_jobs';
-const PAGE_HTML_KEY = 'job_tracker_pages';
+const PAGE_KEY_PREFIX = 'job_page_';
+const OLD_PAGE_HTML_KEY = 'job_tracker_pages';
 
 export const StorageService = {
   /**
@@ -155,15 +156,44 @@ export const StorageService = {
   },
 
   /**
-   * Save page HTML for a job (stored separately to keep jobs list lightweight)
+   * Migrate old monolithic page storage to per-job keys.
+   * Idempotent — safe to call multiple times.
+   * @returns {Promise<void>}
+   */
+  async migratePageStorage() {
+    try {
+      const result = await chrome.storage.local.get(OLD_PAGE_HTML_KEY);
+      const oldPages = result[OLD_PAGE_HTML_KEY];
+      if (!oldPages || typeof oldPages !== 'object') return;
+
+      const entries = Object.entries(oldPages);
+
+      // Remove the old monolithic key FIRST to free space
+      await chrome.storage.local.remove(OLD_PAGE_HTML_KEY);
+
+      // Then write each page to its own key individually
+      for (const [jobKey, html] of entries) {
+        try {
+          await chrome.storage.local.set({ [PAGE_KEY_PREFIX + jobKey]: html });
+        } catch (e) {
+          console.warn(`Job Tracker: Could not migrate page for ${jobKey}:`, e);
+        }
+      }
+
+      console.log(`Job Tracker: Migrated ${entries.length} saved page(s) to per-job storage.`);
+    } catch (e) {
+      console.error('Job Tracker: Migration error:', e);
+    }
+  },
+
+  /**
+   * Save page HTML for a job (each job's page stored under its own key)
    * @param {string} jobKey - Job key
    * @param {string} html - Page HTML content
    * @returns {Promise<void>}
    */
   async savePageHTML(jobKey, html) {
-    const pages = await this.getAllPageHTML();
-    pages[jobKey] = html;
-    await chrome.storage.local.set({ [PAGE_HTML_KEY]: pages });
+    await chrome.storage.local.set({ [PAGE_KEY_PREFIX + jobKey]: html });
   },
 
   /**
@@ -172,8 +202,8 @@ export const StorageService = {
    * @returns {Promise<string|null>} HTML content or null
    */
   async getPageHTML(jobKey) {
-    const pages = await this.getAllPageHTML();
-    return pages[jobKey] || null;
+    const result = await chrome.storage.local.get(PAGE_KEY_PREFIX + jobKey);
+    return result[PAGE_KEY_PREFIX + jobKey] || null;
   },
 
   /**
@@ -181,8 +211,14 @@ export const StorageService = {
    * @returns {Promise<Object>} All pages keyed by job_key
    */
   async getAllPageHTML() {
-    const result = await chrome.storage.local.get(PAGE_HTML_KEY);
-    return result[PAGE_HTML_KEY] || {};
+    const all = await chrome.storage.local.get(null);
+    const pages = {};
+    for (const [key, value] of Object.entries(all)) {
+      if (key.startsWith(PAGE_KEY_PREFIX)) {
+        pages[key.slice(PAGE_KEY_PREFIX.length)] = value;
+      }
+    }
+    return pages;
   },
 
   /**
@@ -191,11 +227,7 @@ export const StorageService = {
    * @returns {Promise<void>}
    */
   async deletePageHTML(jobKey) {
-    const pages = await this.getAllPageHTML();
-    if (pages[jobKey]) {
-      delete pages[jobKey];
-      await chrome.storage.local.set({ [PAGE_HTML_KEY]: pages });
-    }
+    await chrome.storage.local.remove(PAGE_KEY_PREFIX + jobKey);
   },
 
   /**
@@ -204,7 +236,7 @@ export const StorageService = {
    * @returns {Promise<boolean>}
    */
   async hasPageHTML(jobKey) {
-    const pages = await this.getAllPageHTML();
-    return !!pages[jobKey];
+    const result = await chrome.storage.local.get(PAGE_KEY_PREFIX + jobKey);
+    return !!result[PAGE_KEY_PREFIX + jobKey];
   }
 };

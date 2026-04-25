@@ -12,6 +12,7 @@ let filteredJobs = [];
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', async () => {
+    await StorageService.migratePageStorage();
     await loadTheme();
     await loadJobs();
     setupEventListeners();
@@ -318,15 +319,14 @@ async function handleJsonImport(e) {
 
         await chrome.storage.local.set({ job_tracker_jobs: existingJobs });
 
-        // Import saved pages
+        // Import saved pages (per-job keys)
         if (Object.keys(pagesToImport).length > 0) {
-            const existingPages = await StorageService.getAllPageHTML();
             for (const [key, html] of Object.entries(pagesToImport)) {
-                if (!existingPages[key]) {
-                    existingPages[key] = html;
+                const existing = await StorageService.getPageHTML(key);
+                if (!existing) {
+                    await StorageService.savePageHTML(key, html);
                 }
             }
-            await chrome.storage.local.set({ job_tracker_pages: existingPages });
         }
 
         alert(`Import complete: ${newCount} new jobs added, ${updatedCount} already existed (skipped).`);

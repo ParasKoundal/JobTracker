@@ -13,6 +13,9 @@ let existingJob = null;
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // Migrate old page storage format (one-time, idempotent)
+        await StorageService.migratePageStorage();
+
         // Get current tab
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         currentTab = tab;
@@ -222,6 +225,9 @@ async function handleFormSubmit(e) {
                 }
             } catch (err) {
                 console.warn('Could not capture page HTML:', err);
+                // Show a brief non-blocking warning so the user knows
+                const msg = err?.message?.includes('QUOTA') ? 'Storage full — page not saved.' : 'Could not save page.';
+                showSaveWarning(msg);
             }
         }
 
@@ -265,6 +271,19 @@ function showSuccessMessage() {
 
     form.style.display = 'none';
     successMsg.style.display = 'block';
+}
+
+/**
+ * Show a brief warning about page save failure (non-blocking)
+ */
+function showSaveWarning(text) {
+    const successMsg = document.getElementById('successMessage');
+    if (successMsg) {
+        const warning = document.createElement('div');
+        warning.textContent = '⚠️ ' + text;
+        warning.style.cssText = 'color:#f59e0b;font-size:12px;margin-top:8px;';
+        successMsg.appendChild(warning);
+    }
 }
 
 /**

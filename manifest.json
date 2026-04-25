@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Job Tracker",
-  "version": "1.0.0",
+  "version": "1.3.1",
   "description": "Track job applications with one click. Never lose track of where you applied.",
   "permissions": [
     "storage",
