@@ -163,6 +163,7 @@ export const FirebaseSync = {
         // Merge: last-write-wins based on updated_at
         const merged = { ...localJobs };
         let changed = false;
+        let localIsNewer = false;
 
         if (remoteJobs) {
             for (const [key, remoteJob] of Object.entries(remoteJobs)) {
@@ -173,9 +174,19 @@ export const FirebaseSync = {
                     continue;
                 }
 
-                if (!localJob || new Date(remoteJob.updated_at) > new Date(localJob.updated_at)) {
+                if (!localJob) {
                     merged[key] = remoteJob;
                     changed = true;
+                } else {
+                    const remoteTime = new Date(remoteJob.updated_at).getTime();
+                    const localTime = new Date(localJob.updated_at).getTime();
+                    
+                    if (remoteTime > localTime) {
+                        merged[key] = remoteJob;
+                        changed = true;
+                    } else if (localTime > remoteTime) {
+                        localIsNewer = true;
+                    }
                 }
             }
         }
@@ -184,7 +195,7 @@ export const FirebaseSync = {
         const localKeys = Object.keys(localJobs).filter(k => !localJobs[k].sync_disabled);
         const remoteKeys = remoteJobs ? Object.keys(remoteJobs) : [];
         const newLocalKeys = localKeys.filter(k => !remoteKeys.includes(k));
-        const needsPush = newLocalKeys.length > 0 || changed;
+        const needsPush = newLocalKeys.length > 0 || changed || localIsNewer;
 
         // Push merged result back
         if (needsPush) {

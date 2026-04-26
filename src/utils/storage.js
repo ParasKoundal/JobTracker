@@ -32,6 +32,8 @@ export const StorageService = {
     // Attempt Firebase sync implicitly
     if (FirebaseSync.isReady()) {
       FirebaseSync.pushJob(job).catch(e => console.warn('Firebase sync failed:', e));
+    } else {
+      chrome.runtime.sendMessage({ action: 'triggerSync' }).catch(() => {});
     }
     
     return job;
@@ -92,6 +94,8 @@ export const StorageService = {
 
     if (FirebaseSync.isReady()) {
       FirebaseSync.pushJob(jobs[jobKey]).catch(e => console.warn('Firebase sync delete failed:', e));
+    } else {
+      chrome.runtime.sendMessage({ action: 'triggerSync' }).catch(() => {});
     }
 
     return true;
