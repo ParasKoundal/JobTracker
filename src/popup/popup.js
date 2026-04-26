@@ -146,9 +146,9 @@ async function autoFillJobDetails() {
             domainCompany = domainCompany.charAt(0).toUpperCase() + domainCompany.slice(1);
         } catch(e) {}
 
-        // Inject script to pull strictly normalized job classes (Greenhouse/Lever/Workday) or standard H1
+        // Inject script to pull strictly normalized job classes (Greenhouse/Lever/Workday) or standard H1 across ALL frames
         const results = await chrome.scripting.executeScript({
-            target: { tabId: currentTab.id },
+            target: { tabId: currentTab.id, allFrames: true },
             func: () => {
                 const titleNode = document.querySelector('h1, .app-title, .posting-headline h2');
                 const ogTitle = document.querySelector('meta[property="og:title"]');
@@ -162,8 +162,17 @@ async function autoFillJobDetails() {
             }
         });
 
-        if (results && results[0] && results[0].result) {
-            const { exactTitle, ogTitle, ogSiteName, pageTitle } = results[0].result;
+        if (results && results.length > 0) {
+            // Find the active frame containing the real HTML title (solves iframe embedding like Greenhouse)
+            let bestFrame = results[0].result;
+            for (const r of results) {
+                 if (r.result && r.result.exactTitle && r.result.exactTitle.length > 2) {
+                     bestFrame = r.result;
+                     break;
+                 }
+            }
+            
+            const { exactTitle, ogTitle, ogSiteName, pageTitle } = bestFrame || results[0].result;
             
             // Override domainCompany completely if the site natively broadcasts its organization's name!
             if (ogSiteName && ogSiteName.length < 50) {
