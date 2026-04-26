@@ -6,6 +6,7 @@ import { StorageService } from '../utils/storage.js';
 import { formatDate, formatRelativeTime } from '../utils/dateFormatter.js';
 import { jobsToCSV, downloadCSV } from '../utils/csvExporter.js';
 import { capitalizeStatus, escapeHtml } from '../utils/helpers.js';
+import { FirebaseSync } from '../utils/firebaseSync.js';
 
 let allJobs = [];
 let filteredJobs = [];
@@ -445,6 +446,22 @@ function setupEventListeners() {
     closeModal.addEventListener('click', closeEditModal);
     cancelEdit.addEventListener('click', closeEditModal);
     toggleThemeBtn.addEventListener('click', toggleTheme);
+    
+    const openSettingsModal = document.getElementById('openSettingsModal');
+    const closeSettingsModal = document.getElementById('closeSettingsModal');
+    const settingsModal = document.getElementById('settingsModal');
+
+    if (openSettingsModal && settingsModal) {
+        openSettingsModal.addEventListener('click', () => {
+            settingsModal.style.display = 'flex';
+        });
+    }
+
+    if (closeSettingsModal && settingsModal) {
+        closeSettingsModal.addEventListener('click', () => {
+            settingsModal.style.display = 'none';
+        });
+    }
 
     // Analytics toggling
     if (showAnalyticsBtn && toggleAnalyticsBtn && analyticsContainer) {
@@ -465,21 +482,76 @@ function setupEventListeners() {
                 ...settings,
                 reminders_enabled: e.target.checked
             });
-            // Trigger background to update alarms
             chrome.runtime.sendMessage({ action: 'checkAlarms' }).catch(() => {});
         });
     }
 
-    if (dashboardSyncToggle) {
+    const syncPassphraseInput = document.getElementById('dashboardSyncPassphrase');
+    const syncSettingsDiv = document.getElementById('dashboardSyncSettings');
+    const manualSyncBtn = document.getElementById('manualSyncBtn');
+    
+    if (dashboardSyncToggle && syncSettingsDiv) {
         dashboardSyncToggle.addEventListener('change', async (e) => {
             const settings = await StorageService.getSettings();
             await StorageService.saveSettings({
                 ...settings,
                 sync_enabled: e.target.checked
             });
-            if (e.target.checked) {
-                // Initial push to sync when newly enabled
-                StorageService.pushToSync().catch(console.warn);
+            syncSettingsDiv.style.display = e.target.checked ? 'block' : 'none';
+            if (!e.target.checked) {
+                await StorageService.clearSyncPassphrase();
+                if (syncPassphraseInput) syncPassphraseInput.value = '';
+            }
+        });
+    }
+
+    if (syncPassphraseInput) {
+        syncPassphraseInput.addEventListener('change', async (e) => {
+            const val = e.target.value.trim();
+            if (val) {
+                await StorageService.setSyncPassphrase(val);
+                chrome.runtime.sendMessage({ action: 'syncPassphraseUpdated' }).catch(() => {});
+            } else {
+                await StorageService.clearSyncPassphrase();
+            }
+        });
+    }
+
+    const copySyncCodeBtn = document.getElementById('copySyncCodeBtn');
+    if (copySyncCodeBtn && syncPassphraseInput) {
+        copySyncCodeBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(syncPassphraseInput.value).then(() => {
+                const originalText = copySyncCodeBtn.textContent;
+                copySyncCodeBtn.textContent = 'Copied!';
+                setTimeout(() => {
+                    copySyncCodeBtn.textContent = originalText;
+                }, 2000);
+            });
+        });
+    }
+
+    if (manualSyncBtn) {
+        manualSyncBtn.addEventListener('click', async () => {
+            const originalText = manualSyncBtn.textContent;
+            manualSyncBtn.textContent = 'Syncing...';
+            manualSyncBtn.disabled = true;
+            
+            try {
+                const response = await new Promise(resolve => {
+                    chrome.runtime.sendMessage({ action: 'triggerSync' }, resolve);
+                });
+                
+                if (response && response.success) {
+                    await updateLastSyncDisplay();
+                    if (response.changed) {
+                        await loadJobs();
+                    }
+                }
+            } catch (e) {
+                console.error('Manual sync failed', e);
+            } finally {
+                manualSyncBtn.textContent = originalText;
+                manualSyncBtn.disabled = false;
             }
         });
     }
@@ -645,6 +717,11 @@ function showEditModal(job) {
     document.getElementById('editStatus').value = job.status || 'applied';
     document.getElementById('editNotes').value = job.notes || '';
     document.getElementById('editTags').value = (job.tags || []).join(', ');
+    
+    const editSyncToggle = document.getElementById('editSyncToggle');
+    if (editSyncToggle) {
+        editSyncToggle.checked = !job.sync_disabled;
+    }
 
     document.getElementById('editModal').style.display = 'flex';
 }
@@ -680,7 +757,8 @@ async function handleEditSubmit(e) {
             location: document.getElementById('editLocation').value.trim(),
             status: document.getElementById('editStatus').value,
             notes: document.getElementById('editNotes').value.trim(),
-            tags
+            tags,
+            sync_disabled: !document.getElementById('editSyncToggle').checked
         };
 
         // Update applied_at if status changed to 'applied'
@@ -740,9 +818,36 @@ async function loadDashboardSettings() {
     if (remindersToggle) {
         remindersToggle.checked = settings?.reminders_enabled === true; // default false
     }
+    
+    const syncEnabled = settings?.sync_enabled !== false; // default true
     const syncToggle = document.getElementById('dashboardSyncToggle');
+    const syncSettingsDiv = document.getElementById('dashboardSyncSettings');
+    
     if (syncToggle) {
-        syncToggle.checked = settings?.sync_enabled !== false; // default true
+        syncToggle.checked = syncEnabled;
+    }
+    if (syncSettingsDiv) {
+        syncSettingsDiv.style.display = syncEnabled ? 'block' : 'none';
+    }
+
+    const passphraseInput = document.getElementById('dashboardSyncPassphrase');
+    if (passphraseInput) {
+        const pass = await StorageService.getSyncPassphrase();
+        passphraseInput.value = pass || '';
+    }
+
+    await updateLastSyncDisplay();
+}
+
+async function updateLastSyncDisplay() {
+    const lastSyncSpan = document.getElementById('lastSyncTime');
+    if (!lastSyncSpan) return;
+    
+    const time = await StorageService.getLastSyncTime();
+    if (time) {
+        lastSyncSpan.textContent = formatRelativeTime(time);
+    } else {
+        lastSyncSpan.textContent = 'Never';
     }
 }
 

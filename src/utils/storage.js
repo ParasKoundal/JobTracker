@@ -1,8 +1,9 @@
 /**
  * Storage service for managing job applications
- * Uses Chrome Storage API
+ * Uses Chrome Storage API + Firebase for cross-device sync
  */
 import { canonicalizeURL } from './urlCanonicalizer.js';
+import { FirebaseSync } from './firebaseSync.js';
 
 const STORAGE_KEY = 'job_tracker_jobs';
 const PAGE_KEY_PREFIX = 'job_page_';
@@ -28,8 +29,10 @@ export const StorageService = {
     
     await chrome.storage.local.set({ [STORAGE_KEY]: jobs });
     
-    // Attempt sync implicitly
-    this.pushJobToSync(job).catch(e => console.warn('Sync failed:', e));
+    // Attempt Firebase sync implicitly
+    if (FirebaseSync.isReady()) {
+      FirebaseSync.pushJob(job).catch(e => console.warn('Firebase sync failed:', e));
+    }
     
     return job;
   },
@@ -80,7 +83,9 @@ export const StorageService = {
     // Also delete saved page HTML if it exists
     await this.deletePageHTML(jobKey);
 
-    this.removeJobFromSync(jobKey).catch(e => console.warn('Sync delete failed:', e));
+    if (FirebaseSync.isReady()) {
+      FirebaseSync.deleteJob(jobKey).catch(e => console.warn('Firebase sync delete failed:', e));
+    }
 
     return true;
   },
@@ -246,73 +251,71 @@ export const StorageService = {
     return !!result[PAGE_KEY_PREFIX + jobKey];
   },
 
-  // --- CROSS DEVICE SYNC ---
+  // --- CROSS DEVICE SYNC (Firebase) ---
 
   /**
-   * Push a single job to sync storage
+   * Generate a secure, time-seeded unique Sync Code
+   * @returns {string}
    */
-  async pushJobToSync(job) {
-      const settings = await this.getSettings();
-      if (settings?.sync_enabled === false) return;
+  generateSyncCode() {
+      // Time seed based on exact millisecond of creation
+      const timestamp = Date.now().toString(36).toUpperCase();
       
-      const syncKey = 'sjob_' + job.job_key;
-      await chrome.storage.sync.set({ [syncKey]: job });
-  },
-
-  /**
-   * Remove a job from sync storage
-   */
-  async removeJobFromSync(jobKey) {
-      const settings = await this.getSettings();
-      if (settings?.sync_enabled === false) return;
+      // Cryptographically secure randomness
+      const array = new Uint32Array(2);
+      // In service workers and extension contexts, crypto is available
+      crypto.getRandomValues(array);
+      const random1 = array[0].toString(36).toUpperCase().padStart(6, '0').substring(0, 6);
+      const random2 = array[1].toString(36).toUpperCase().padStart(6, '0').substring(0, 6);
       
-      await chrome.storage.sync.remove('sjob_' + jobKey);
+      return `JT-${timestamp}-${random1}-${random2}`;
   },
 
   /**
-   * Push all current jobs to sync (Full overwrite to remote)
+   * Get saved sync code from local storage
+   * Auto-generates one if it doesn't exist
+   * @returns {Promise<string>}
    */
-  async pushToSync() {
-      const settings = await this.getSettings();
-      if (settings?.sync_enabled === false) return;
-
-      const jobs = await this.getAllJobsArray();
-      // Cap to most recently updated 400 to avoid sync quota exceeded
-      const jobsToSync = jobs.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0)).slice(0, 400);
-
-      const syncObj = {};
-      for (const job of jobsToSync) {
-          syncObj['sjob_' + job.job_key] = job;
+  async getSyncPassphrase() {
+      const result = await chrome.storage.local.get('job_tracker_sync_passphrase');
+      let code = result.job_tracker_sync_passphrase;
+      if (!code) {
+          code = this.generateSyncCode();
+          await this.setSyncPassphrase(code);
       }
-
-      await chrome.storage.sync.set(syncObj);
+      return code;
   },
 
   /**
-   * Pull jobs from sync and merge into local
+   * Save sync passphrase to local storage
+   * @param {string} passphrase
    */
-  async pullFromSync() {
-      const settings = await this.getSettings();
-      if (settings?.sync_enabled === false) return false;
+  async setSyncPassphrase(passphrase) {
+      await chrome.storage.local.set({ job_tracker_sync_passphrase: passphrase });
+  },
 
-      const syncItems = await chrome.storage.sync.get(null);
-      const syncJobs = Object.values(syncItems).filter(item => item && item.job_key);
-      const localJobs = await this.getAllJobs();
-      let madeChanges = false;
+  /**
+   * Clear sync passphrase
+   */
+  async clearSyncPassphrase() {
+      await chrome.storage.local.remove('job_tracker_sync_passphrase');
+  },
 
-      // Merge remote onto local based on updated_at
-      for (const sJob of syncJobs) {
-          const lJob = localJobs[sJob.job_key];
-          if (!lJob || new Date(sJob.updated_at) > new Date(lJob.updated_at)) {
-              localJobs[sJob.job_key] = sJob;
-              madeChanges = true;
-          }
-      }
+  /**
+   * Save last sync timestamp
+   * @param {string} timestamp - ISO timestamp
+   */
+  async setLastSyncTime(timestamp) {
+      await chrome.storage.local.set({ job_tracker_last_sync: timestamp });
+  },
 
-      if (madeChanges) {
-          await chrome.storage.local.set({ [STORAGE_KEY]: localJobs });
-      }
-
-      return madeChanges;
+  /**
+   * Get last sync timestamp
+   * @returns {Promise<string|null>}
+   */
+  async getLastSyncTime() {
+      const result = await chrome.storage.local.get('job_tracker_last_sync');
+      return result.job_tracker_last_sync || null;
   }
 };
+

@@ -22,7 +22,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentTab = tab;
 
         // Pre-capture page HTML immediately while activeTab permission is fresh
-        capturedPageHTML = await capturePageHTML(tab.id);
+        if (!tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+            capturedPageHTML = await capturePageHTML(tab.id);
+        } else {
+            capturedPageHTML = null;
+        }
 
         // Check if this job is already tracked
         existingJob = await StorageService.findJobByURL(tab.url);
@@ -33,7 +37,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             await checkSavedPage(existingJob);
         } else {
             // Try to auto-detect job details from page
-            await autoFillJobDetails();
+            if (!tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+                await autoFillJobDetails();
+            }
         }
 
         // Set up event listeners
@@ -277,7 +283,8 @@ async function handleFormSubmit(e) {
             location,
             status,
             notes,
-            tags
+            tags,
+            sync_disabled: !document.getElementById('syncJobToggle').checked
         };
 
         // Set applied_at if status is 'applied' and it's a new job
@@ -314,23 +321,16 @@ async function handleFormSubmit(e) {
         // Persist the save page & reminders preference
         const settings = await StorageService.getSettings();
         const remindersToggle = document.getElementById('remindersToggle');
-        const syncToggle = document.getElementById('syncToggle');
         
         await StorageService.saveSettings({
             ...settings,
             save_page_html: savePageToggle ? savePageToggle.checked : true,
-            reminders_enabled: remindersToggle ? remindersToggle.checked : true,
-            sync_enabled: syncToggle ? syncToggle.checked : true
+            reminders_enabled: remindersToggle ? remindersToggle.checked : true
         });
 
         // Trigger alarm check in service worker if toggled
         if (remindersToggle && remindersToggle.checked) {
             chrome.runtime.sendMessage({ action: 'checkAlarms' }).catch(() => {});
-        }
-        
-        // Push initial sync if enabled
-        if (syncToggle && syncToggle.checked) {
-            StorageService.pushToSync().catch(e => console.warn('Initial sync failed:', e));
         }
 
         // Show success message
@@ -401,11 +401,15 @@ async function loadSettings() {
     const settings = await StorageService.getSettings();
     const savePage = settings?.save_page_html !== false; // default true
     const reminders = settings?.reminders_enabled === true; // default false
-    const syncEnabled = settings?.sync_enabled !== false; // default true
+    const globalSyncEnabled = settings?.sync_enabled !== false; // default true
     
     document.getElementById('savePageToggle').checked = savePage;
     document.getElementById('remindersToggle').checked = reminders;
-    document.getElementById('syncToggle').checked = syncEnabled;
+
+    const perJobSyncGroup = document.getElementById('perJobSyncGroup');
+    if (perJobSyncGroup) {
+        perJobSyncGroup.style.display = globalSyncEnabled ? 'flex' : 'none';
+    }
 }
 
 /**

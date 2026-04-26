@@ -2,7 +2,6 @@
   "manifest_version": 3,
   "name": "Job Tracker",
   "version": "1.3.1",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0rEoSbIp6rrFWMRGyQIPeQJ7KMIzyCe4gCUeungJ8nXPrr7wOR6Hs0DYBf+leoOWHb8+1R0MDKMk7MIoEvO32naP4F619Z6GrwOk1LirZb5cZN23IGdCs6Wzls0vKjVCZwBK6vlXSDpG0S2XrnogvRN9uzMrg253TJbqe/kcTauY7cvjUAFXr3GbmnZbn30QQ+D1rCMIBkxFUx+JxN/YFz/lTcgtzq+DQxxSHGnnk27Y1wjt3UMtlaoKs8S6lJR6jUgMszHPzjS+23ghH8nfraBs4RmUT4h1f+b4hkWy/61fgdEPN5E6Q4lEZDMc58qkhKr/S9hbzWPdeX73z5oHHwIDAQAB",
   "description": "Track job applications with one click. Never lose track of where you applied.",
   "permissions": [
     "storage",

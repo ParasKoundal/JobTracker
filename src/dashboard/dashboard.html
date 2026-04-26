@@ -32,6 +32,12 @@
                             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"/>
                         </svg>
                     </button>
+                    <button id="openSettingsModal" class="theme-toggle" title="Settings" style="opacity: 1; margin-left: 12px;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                    </button>
                 </div>
                 <div class="header-stats">
                     <div class="stat">
@@ -238,6 +244,14 @@
                     <input type="text" id="editLocation" name="location" autocomplete="address-level2">
                 </div>
 
+                <div class="form-group form-group-inline" style="margin-top: 16px;">
+                    <label for="editSyncToggle" class="toggle-label" title="Sync this specific job across your devices">Sync this job</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="editSyncToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
                 <div class="form-actions">
                     <button type="button" class="btn-secondary" id="cancelEdit">Cancel</button>
                     <button type="submit" class="btn-primary">Save Changes</button>
@@ -269,6 +283,24 @@
                         <input type="checkbox" id="dashboardSyncToggle" checked>
                         <span class="toggle-slider"></span>
                     </label>
+                </div>
+                
+                <div id="dashboardSyncSettings" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color, #e0e0e0);">
+                    <div class="form-group">
+                        <label for="dashboardSyncPassphrase">Your Unique Sync Code</label>
+                        <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+                            <input type="text" id="dashboardSyncPassphrase" style="flex: 1; font-family: monospace; letter-spacing: 1px; font-weight: bold; background: var(--bg-secondary);">
+                            <button type="button" id="copySyncCodeBtn" class="btn-secondary" style="padding: 0 12px; white-space: nowrap;">Copy Code</button>
+                        </div>
+                        <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px;">This secure code is seeded from your installation time. Copy and paste it into Job Tracker on your other devices to link them together.</div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="font-size: 11px; color: #6b7280;">
+                            Last sync: <span id="lastSyncTime">Never</span>
+                        </div>
+                        <button id="manualSyncBtn" class="btn-secondary btn-sm">Sync Now</button>
+                    </div>
                 </div>
             </div>
         </div>

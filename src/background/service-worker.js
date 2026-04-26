@@ -264,6 +264,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
 });
 
+// --- Firebase Sync Initialization ---
+
+import { FirebaseSync } from '../utils/firebaseSync.js';
+
+/**
+ * Initialize Firebase sync from saved passphrase
+ */
+async function initFirebaseSync() {
+    const passphrase = await StorageService.getSyncPassphrase();
+    if (passphrase) {
+        await FirebaseSync.init(passphrase);
+        console.log('Job Tracker: Firebase sync initialized');
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Perform a full Firebase sync (push + pull + merge)
+ */
+async function performFirebaseSync() {
+    if (!FirebaseSync.isReady()) return false;
+
+    try {
+        const localJobs = await StorageService.getAllJobs();
+        const { merged, changed } = await FirebaseSync.fullSync(localJobs);
+
+        if (changed) {
+            await chrome.storage.local.set({ job_tracker_jobs: merged });
+            console.log('Job Tracker: Merged remote data from Firebase');
+            chrome.runtime.sendMessage({ action: 'syncUpdated' }).catch(() => {});
+        }
+
+        await StorageService.setLastSyncTime(new Date().toISOString());
+        await FirebaseSync.heartbeat();
+        return changed;
+    } catch (e) {
+        console.warn('Job Tracker: Firebase sync failed:', e);
+        return false;
+    }
+}
+
 // Listen for extension installation
 chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason === 'install') {
@@ -275,38 +317,33 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     syncAlarms(); // Setup alarms initially
     await StorageService.migratePageStorage();
 
-    // On install or update, push local data to sync and pull remote data
-    try {
-        await StorageService.pushToSync();
-        console.log('Job Tracker: Pushed local data to sync on install/update');
-        const pulled = await StorageService.pullFromSync();
-        if (pulled) console.log('Job Tracker: Pulled remote data on install/update');
-    } catch (e) {
-        console.warn('Job Tracker: Initial sync failed:', e);
+    // Initialize Firebase and sync
+    const synced = await initFirebaseSync();
+    if (synced) {
+        await performFirebaseSync();
+    }
+
+    // Report install event (anonymous telemetry)
+    if (details.reason === 'install') {
+        FirebaseSync.reportEvent('extension_installed').catch(() => {});
     }
 });
 
-// Startup logic — pull from sync in case another device pushed changes
+// Startup logic — init Firebase and pull from sync
 chrome.runtime.onStartup.addListener(async () => {
     syncAlarms();
-    try {
-        const pulled = await StorageService.pullFromSync();
-        if (pulled) {
-            console.log('Job Tracker: Pulled remote data on startup');
-            chrome.runtime.sendMessage({ action: 'syncUpdated' }).catch(() => {});
-        }
-    } catch (e) {
-        console.warn('Job Tracker: Startup sync pull failed:', e);
-    }
+    await initFirebaseSync();
+    await performFirebaseSync();
 });
 
 // --- Follow-up Reminders Logic ---
 
 async function syncAlarms() {
     const settings = await StorageService.getSettings();
-    const enabled = settings?.reminders_enabled === true; // default false
+    const remindersEnabled = settings?.reminders_enabled === true; // default false
+    const syncEnabled = settings?.sync_enabled !== false; // default true
     
-    if (enabled) {
+    if (remindersEnabled) {
         chrome.alarms.create('checkStaleJobs', { periodInMinutes: 1440 }); // Checks daily
         checkStaleJobs(); // Run immediately
     } else {
@@ -314,6 +351,13 @@ async function syncAlarms() {
         if (chrome.action && chrome.action.setBadgeText) {
             chrome.action.setBadgeText({ text: '' });
         }
+    }
+
+    // Periodic Firebase sync every 5 minutes
+    if (syncEnabled) {
+        chrome.alarms.create('firebaseSync', { periodInMinutes: 5 });
+    } else {
+        chrome.alarms.clear('firebaseSync');
     }
 }
 
@@ -348,21 +392,33 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'checkStaleJobs') {
         checkStaleJobs();
     }
-});
-
-// Listen for sync storage changes natively
-chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'sync') {
-        // Debounce or just pull all right away
-        StorageService.pullFromSync().then(madeChanges => {
-            if (madeChanges) {
-                console.log('Job Tracker: Synced new data from remote device');
-                checkStaleJobs();
-                // Optionally broadcast a message to the dashboard to refresh
-                chrome.runtime.sendMessage({ action: 'syncUpdated' }).catch(() => {});
-            }
-        }).catch(err => {
-            console.error('Job Tracker sync pull error:', err);
-        });
+    if (alarm.name === 'firebaseSync') {
+        performFirebaseSync();
     }
 });
+
+// Listen for sync passphrase updates from popup/dashboard
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'syncPassphraseUpdated') {
+        (async () => {
+            await initFirebaseSync();
+            const changed = await performFirebaseSync();
+            sendResponse({ success: true, changed });
+        })();
+        return true;
+    }
+
+    if (message.action === 'triggerSync') {
+        (async () => {
+            if (!FirebaseSync.isReady()) {
+                await initFirebaseSync();
+            }
+            const changed = await performFirebaseSync();
+            sendResponse({ success: true, changed });
+        })();
+        return true;
+    }
+
+    return false;
+});
+

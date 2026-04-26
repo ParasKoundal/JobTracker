@@ -43,8 +43,6 @@ function sendMessage(action, data = {}) {
 
         if (response && response.job) {
             showCornerMarker(response.job, response.theme);
-        } else {
-            showTrackButton();
         }
     } catch (error) {
         console.error('Job Tracker: Error initializing content script', error);
