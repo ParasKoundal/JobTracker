@@ -5,6 +5,7 @@
   "description": "Track job applications with one click. Never lose track of where you applied.",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "activeTab",
     "tabs",
     "scripting"
