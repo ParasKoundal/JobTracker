@@ -44,7 +44,8 @@ export const StorageService = {
    */
   async getJob(jobKey) {
     const jobs = await this.getAllJobs();
-    return jobs[jobKey] || null;
+    const job = jobs[jobKey] || null;
+    return (job && !job.deleted) ? job : null;
   },
 
   /**
@@ -62,7 +63,7 @@ export const StorageService = {
    */
   async getAllJobsArray() {
     const jobs = await this.getAllJobs();
-    return Object.values(jobs);
+    return Object.values(jobs).filter(job => !job.deleted);
   },
 
   /**
@@ -77,14 +78,20 @@ export const StorageService = {
       return false;
     }
 
-    delete jobs[jobKey];
+    // Leave a tombstone instead of completely deleting to sync the deletion
+    jobs[jobKey] = {
+      job_key: jobKey,
+      deleted: true,
+      updated_at: new Date().toISOString()
+    };
+    
     await chrome.storage.local.set({ [STORAGE_KEY]: jobs });
 
     // Also delete saved page HTML if it exists
     await this.deletePageHTML(jobKey);
 
     if (FirebaseSync.isReady()) {
-      FirebaseSync.deleteJob(jobKey).catch(e => console.warn('Firebase sync delete failed:', e));
+      FirebaseSync.pushJob(jobs[jobKey]).catch(e => console.warn('Firebase sync delete failed:', e));
     }
 
     return true;
