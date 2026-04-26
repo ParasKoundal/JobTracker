@@ -16,7 +16,7 @@ Job Tracker is built on **Swiss Minimalism**—zero clutter, sharp geometry, and
 - **Smart URL Matching**: We automatically detect if you stumble across a job you've already locally saved.
 - **Offline Page Backup**: Takes a full offline snapshot of the job description in case the company deletes the remote listing.
 - **Insightful Analytics**: View application timelines, status funnels, and response rates natively in your dashboard.
-- **Cross-Device Sync**: Optional sync via your Google account so your pipeline effortlessly follows you across desktop devices.
+- **Secure Cross-Device Sync**: Generate a unique Sync Code to seamlessly link your pipeline across multiple devices. Individual jobs can be explicitly excluded from sync at any time for total privacy.
 - **Follow-Up Reminders**: Optional badge alerts reminding you to follow up on applications that have gone stale.
 - **Complete Data Portability**: Export or import your entire pipeline instantly to standard JSON or CSV files.
 
@@ -41,8 +41,9 @@ The extension stays completely out of your way until you need it.
 ---
 
 ## 🔒 Privacy & Architecture
-All information is saved strictly to your local machine using the native `chrome.storage.local` API.
-No tracking routines, no analytics payloads, no external servers, no paywalls. Completely offline capable.
+Job Tracker is fundamentally built to be local-first. By default, your data is saved strictly to your local machine using the native `chrome.storage.local` API. We don't use third-party analytics or tracking payloads.
+
+**Regarding Sync:** If you choose to link multiple devices using a Sync Code, your jobs are securely routed through a cloud backend managed exclusively by the developer to facilitate the real-time connection. Your data is strictly isolated to your personal Sync Code channel. We do not read, sell, or share your tracking data, and you can always toggle "Exclude from Sync" on any sensitive job to guarantee it stays 100% offline on your hard drive.
 
 ---
 
