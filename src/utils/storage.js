@@ -27,6 +27,10 @@ export const StorageService = {
     jobs[job.job_key] = job;
     
     await chrome.storage.local.set({ [STORAGE_KEY]: jobs });
+    
+    // Attempt sync implicitly
+    this.pushJobToSync(job).catch(e => console.warn('Sync failed:', e));
+    
     return job;
   },
 
@@ -75,6 +79,8 @@ export const StorageService = {
 
     // Also delete saved page HTML if it exists
     await this.deletePageHTML(jobKey);
+
+    this.removeJobFromSync(jobKey).catch(e => console.warn('Sync delete failed:', e));
 
     return true;
   },
@@ -238,5 +244,75 @@ export const StorageService = {
   async hasPageHTML(jobKey) {
     const result = await chrome.storage.local.get(PAGE_KEY_PREFIX + jobKey);
     return !!result[PAGE_KEY_PREFIX + jobKey];
+  },
+
+  // --- CROSS DEVICE SYNC ---
+
+  /**
+   * Push a single job to sync storage
+   */
+  async pushJobToSync(job) {
+      const settings = await this.getSettings();
+      if (settings?.sync_enabled === false) return;
+      
+      const syncKey = 'sjob_' + job.job_key;
+      await chrome.storage.sync.set({ [syncKey]: job });
+  },
+
+  /**
+   * Remove a job from sync storage
+   */
+  async removeJobFromSync(jobKey) {
+      const settings = await this.getSettings();
+      if (settings?.sync_enabled === false) return;
+      
+      await chrome.storage.sync.remove('sjob_' + jobKey);
+  },
+
+  /**
+   * Push all current jobs to sync (Full overwrite to remote)
+   */
+  async pushToSync() {
+      const settings = await this.getSettings();
+      if (settings?.sync_enabled === false) return;
+
+      const jobs = await this.getAllJobsArray();
+      // Cap to most recently updated 400 to avoid sync quota exceeded
+      const jobsToSync = jobs.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0)).slice(0, 400);
+
+      const syncObj = {};
+      for (const job of jobsToSync) {
+          syncObj['sjob_' + job.job_key] = job;
+      }
+
+      await chrome.storage.sync.set(syncObj);
+  },
+
+  /**
+   * Pull jobs from sync and merge into local
+   */
+  async pullFromSync() {
+      const settings = await this.getSettings();
+      if (settings?.sync_enabled === false) return false;
+
+      const syncItems = await chrome.storage.sync.get(null);
+      const syncJobs = Object.values(syncItems).filter(item => item && item.job_key);
+      const localJobs = await this.getAllJobs();
+      let madeChanges = false;
+
+      // Merge remote onto local based on updated_at
+      for (const sJob of syncJobs) {
+          const lJob = localJobs[sJob.job_key];
+          if (!lJob || new Date(sJob.updated_at) > new Date(lJob.updated_at)) {
+              localJobs[sJob.job_key] = sJob;
+              madeChanges = true;
+          }
+      }
+
+      if (madeChanges) {
+          await chrome.storage.local.set({ [STORAGE_KEY]: localJobs });
+      }
+
+      return madeChanges;
   }
 };

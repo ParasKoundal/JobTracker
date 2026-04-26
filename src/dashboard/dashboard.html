@@ -18,10 +18,18 @@
                             stroke="currentColor" stroke-width="2" />
                     </svg>
                     <h1>Job Tracker</h1>
-                    <button id="toggleTheme" class="theme-toggle" title="Toggle Theme">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" id="themeIcon">
-                            <circle cx="10" cy="10" r="4" stroke="currentColor" stroke-width="1.5"/>
-                            <path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9L4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <div style="display: flex; gap: 16px; margin-left: 20px; padding-left: 20px; border-left: 1px solid var(--border-color, #e0e0e0); align-items: center;">
+                        <label style="font-size: 12px; font-weight: 500; text-transform: uppercase; display: flex; align-items: center; gap: 8px; cursor: pointer; opacity: 0.9;">
+                            <input type="checkbox" id="dashboardRemindersToggle" style="transform: scale(1.2); margin: 0;"> Reminders
+                        </label>
+                        <label style="font-size: 12px; font-weight: 500; text-transform: uppercase; display: flex; align-items: center; gap: 8px; cursor: pointer; opacity: 0.9;">
+                            <input type="checkbox" id="dashboardSyncToggle" style="transform: scale(1.2); margin: 0;"> Sync
+                        </label>
+                    </div>
+                    <div style="flex-grow: 1;"></div>
+                    <button id="toggleTheme" class="theme-toggle" title="Toggle Theme" style="opacity: 1;">
+                        <svg width="22" height="22" viewBox="0 0 20 20" fill="none" id="themeIcon">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"/>
                         </svg>
                     </button>
                 </div>
@@ -62,6 +70,8 @@
                         <option value="rejected">Rejected</option>
                     </select>
 
+                    <input type="text" id="tagFilter" placeholder="Filter by tag...">
+
                     <select id="sortBy">
                         <option value="updated_desc">Recently Updated</option>
                         <option value="created_desc">Recently Added</option>
@@ -100,6 +110,49 @@
                 </div>
             </div>
 
+            <!-- Analytics Section -->
+            <div class="analytics-container" style="display: none;" id="analyticsContainer">
+                <div class="analytics-header">
+                    <h2>Analytics</h2>
+                    <button id="toggleAnalyticsBtn" class="btn-secondary btn-sm" style="margin-left: 12px;">Hide</button>
+                </div>
+                <div class="analytics-grid">
+                    <div class="analytics-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                            <h3 style="margin-bottom: 0; white-space: nowrap;">Applications Over Time</h3>
+                            <select id="timeRangeFilter" class="range-select" style="background: transparent; border: 1px solid #e0e0e0; font-size: 10px; padding: 2px 6px; border-radius: 4px; color: inherit; outline: none; cursor: pointer; text-transform: uppercase;">
+                                <option value="1">Day</option>
+                                <option value="7">Week</option>
+                                <option value="14" selected>2 Weeks</option>
+                                <option value="30">Month</option>
+                                <option value="180">6 Months</option>
+                                <option value="365">Year</option>
+                                <option value="9999">Forever</option>
+                            </select>
+                        </div>
+                        <div class="chart-container" id="applicationsChart">
+                            <!-- JS will populate SVG/DOM bars -->
+                        </div>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>Status Funnel</h3>
+                        <div class="funnel-container" id="statusFunnel">
+                            <!-- JS will populate -->
+                        </div>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>Response Rate</h3>
+                        <div class="response-stats" id="responseStats">
+                            <!-- JS will populate -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-actions" style="margin-bottom: 24px; display: flex; justify-content: flex-end;">
+                <button id="showAnalyticsBtn" class="btn-secondary btn-sm">Show Analytics 📈</button>
+            </div>
+
             <div class="table-container">
                 <table class="jobs-table" id="jobsTable">
                     <thead>
@@ -109,6 +162,7 @@
                             <th>Status</th>
                             <th>Applied</th>
                             <th>Last Seen</th>
+                            <th>Tags</th>
                             <th>Source</th>
                             <th>Actions</th>
                         </tr>
@@ -177,11 +231,44 @@
                     <textarea id="editNotes" rows="3"></textarea>
                 </div>
 
+                <div class="form-group">
+                    <label for="editTags">Tags</label>
+                    <input type="text" id="editTags" placeholder="e.g., remote, startup, $150k+">
+                </div>
+
                 <div class="form-actions">
                     <button type="button" class="btn-secondary" id="cancelEdit">Cancel</button>
                     <button type="submit" class="btn-primary">Save Changes</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="modal-close" id="closeSettingsModal">&times;</button>
+            </div>
+
+            <div class="modal-form">
+                <div class="form-group form-group-inline" style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="dashboardRemindersToggle" class="toggle-label" title="Get notified if you haven't heard back in 14 days" style="margin-bottom: 0;">Follow-Up Reminders (14 Days)</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="dashboardRemindersToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="form-group form-group-inline" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                    <label for="dashboardSyncToggle" class="toggle-label" title="Sync job status across browser instances" style="margin-bottom: 0;">Cross-Device Sync</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="dashboardSyncToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
 

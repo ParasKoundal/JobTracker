@@ -130,9 +130,9 @@ async function updateIconForStatus(status, tabId = null) {
         // Fallback to default icon on error
         chrome.action.setIcon({
             path: {
-                16: 'icons/icon16.png',
-                48: 'icons/icon48.png',
-                128: 'icons/icon128.png'
+                16: '/icons/icon16.png',
+                48: '/icons/icon48.png',
+                128: '/icons/icon128.png'
             },
             tabId: tabId
         });
@@ -255,6 +255,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true; // keep message channel open for async response
     }
 
+    if (message.action === 'checkAlarms') {
+        syncAlarms();
+        sendResponse({ success: true });
+        return true;
+    }
+
     return false;
 });
 
@@ -264,6 +270,79 @@ chrome.runtime.onInstalled.addListener((details) => {
         // Open dashboard on first install
         chrome.tabs.create({
             url: chrome.runtime.getURL('src/dashboard/dashboard.html')
+        });
+    }
+    syncAlarms(); // Setup alarms initially
+});
+
+// Startup logic
+chrome.runtime.onStartup.addListener(() => {
+    syncAlarms();
+});
+
+// --- Follow-up Reminders Logic ---
+
+async function syncAlarms() {
+    const settings = await StorageService.getSettings();
+    const enabled = settings?.reminders_enabled === true; // default false
+    
+    if (enabled) {
+        chrome.alarms.create('checkStaleJobs', { periodInMinutes: 1440 }); // Checks daily
+        checkStaleJobs(); // Run immediately
+    } else {
+        chrome.alarms.clear('checkStaleJobs');
+        if (chrome.action && chrome.action.setBadgeText) {
+            chrome.action.setBadgeText({ text: '' });
+        }
+    }
+}
+
+async function checkStaleJobs() {
+    try {
+        const jobs = await StorageService.getAllJobsArray();
+        const today = new Date();
+        
+        const staleJobs = jobs.filter(job => {
+            if (job.status !== 'applied' || !job.applied_at) return false;
+            
+            const appliedDate = new Date(job.applied_at);
+            const diffDays = (today - appliedDate) / (1000 * 60 * 60 * 24);
+            
+            return diffDays >= 14;
+        });
+        
+        if (chrome.action && chrome.action.setBadgeText) {
+            if (staleJobs.length > 0) {
+                chrome.action.setBadgeText({ text: staleJobs.length.toString() });
+                chrome.action.setBadgeBackgroundColor({ color: '#ef4444' }); // Red
+            } else {
+                chrome.action.setBadgeText({ text: '' });
+            }
+        }
+    } catch (err) {
+        console.error('Error checking stale jobs:', err);
+    }
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'checkStaleJobs') {
+        checkStaleJobs();
+    }
+});
+
+// Listen for sync storage changes natively
+chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'sync') {
+        // Debounce or just pull all right away
+        StorageService.pullFromSync().then(madeChanges => {
+            if (madeChanges) {
+                console.log('Job Tracker: Synced new data from remote device');
+                checkStaleJobs();
+                // Optionally broadcast a message to the dashboard to refresh
+                chrome.runtime.sendMessage({ action: 'syncUpdated' }).catch(() => {});
+            }
+        }).catch(err => {
+            console.error('Job Tracker sync pull error:', err);
         });
     }
 });

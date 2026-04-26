@@ -103,6 +103,7 @@ function populateForm(job) {
     document.getElementById('location').value = job.location || '';
     document.getElementById('status').value = job.status || 'applied';
     document.getElementById('notes').value = job.notes || '';
+    document.getElementById('tags').value = (job.tags || []).join(', ');
 }
 
 /**
@@ -189,8 +190,8 @@ function setupEventListeners() {
     // Load saved theme
     loadTheme();
 
-    // Load save page setting
-    loadSavePageSetting();
+    // Load settings
+    loadSettings();
 }
 
 /**
@@ -206,6 +207,8 @@ async function handleFormSubmit(e) {
         const location = formData.get('location').trim();
         const status = formData.get('status');
         const notes = formData.get('notes').trim();
+        const tagsInput = formData.get('tags').trim();
+        const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
 
         if (!company || !title) {
             alert('Company and Title are required');
@@ -228,7 +231,7 @@ async function handleFormSubmit(e) {
             location,
             status,
             notes,
-            tags: []
+            tags
         };
 
         // Set applied_at if status is 'applied' and it's a new job
@@ -262,12 +265,27 @@ async function handleFormSubmit(e) {
             }
         }
 
-        // Persist the save page preference
+        // Persist the save page & reminders preference
         const settings = await StorageService.getSettings();
+        const remindersToggle = document.getElementById('remindersToggle');
+        const syncToggle = document.getElementById('syncToggle');
+        
         await StorageService.saveSettings({
             ...settings,
-            save_page_html: savePageToggle.checked
+            save_page_html: savePageToggle ? savePageToggle.checked : true,
+            reminders_enabled: remindersToggle ? remindersToggle.checked : true,
+            sync_enabled: syncToggle ? syncToggle.checked : true
         });
+
+        // Trigger alarm check in service worker if toggled
+        if (remindersToggle && remindersToggle.checked) {
+            chrome.runtime.sendMessage({ action: 'checkAlarms' }).catch(() => {});
+        }
+        
+        // Push initial sync if enabled
+        if (syncToggle && syncToggle.checked) {
+            StorageService.pushToSync().catch(e => console.warn('Initial sync failed:', e));
+        }
 
         // Show success message
         showSuccessMessage();
@@ -331,12 +349,17 @@ function openDashboard() {
 
 
 /**
- * Load save page setting (default: true)
+ * Load save page & reminders setting
  */
-async function loadSavePageSetting() {
+async function loadSettings() {
     const settings = await StorageService.getSettings();
     const savePage = settings?.save_page_html !== false; // default true
+    const reminders = settings?.reminders_enabled === true; // default false
+    const syncEnabled = settings?.sync_enabled !== false; // default true
+    
     document.getElementById('savePageToggle').checked = savePage;
+    document.getElementById('remindersToggle').checked = reminders;
+    document.getElementById('syncToggle').checked = syncEnabled;
 }
 
 /**

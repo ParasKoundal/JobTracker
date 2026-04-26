@@ -14,6 +14,7 @@ let filteredJobs = [];
 document.addEventListener('DOMContentLoaded', async () => {
     await StorageService.migratePageStorage();
     await loadTheme();
+    await loadDashboardSettings();
     await loadJobs();
     setupEventListeners();
 });
@@ -26,6 +27,7 @@ async function loadJobs() {
         allJobs = await StorageService.getAllJobsArray();
         applyFiltersAndSort();
         updateStats();
+        updateAnalytics();
     } catch (error) {
         console.error('Error loading jobs:', error);
     }
@@ -47,8 +49,15 @@ function applyFiltersAndSort() {
             (job.location || '').toLowerCase().includes(searchTerm);
 
         const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+        
+        const tagFilterVal = document.getElementById('tagFilter').value.toLowerCase().trim();
+        let matchesTag = true;
+        if (tagFilterVal) {
+            const tags = job.tags || [];
+            matchesTag = tags.some(tag => tag.toLowerCase().includes(tagFilterVal));
+        }
 
-        return matchesSearch && matchesStatus;
+        return matchesSearch && matchesStatus && matchesTag;
     });
 
     // Sort
@@ -106,11 +115,26 @@ async function renderTable() {
 
     // Check which jobs have saved pages
     const savedPages = await StorageService.getAllPageHTML();
+    
+    // Check if reminders are enabled
+    const settings = await StorageService.getSettings();
+    const remindersEnabled = settings?.reminders_enabled === true; // default false
+    const today = new Date();
 
     // Render rows
     filteredJobs.forEach(job => {
         const hasSavedPage = !!savedPages[job.job_key];
+        
+        let isStale = false;
+        if (remindersEnabled && job.status === 'applied' && job.applied_at) {
+            const appliedDate = new Date(job.applied_at);
+            const diffDays = (today - appliedDate) / (1000 * 60 * 60 * 24);
+            isStale = diffDays >= 14;
+        }
+
         const row = document.createElement('tr');
+        if (isStale) row.classList.add('stale-job');
+        
         row.innerHTML = `
       <td>
         <div class="company-cell">
@@ -119,6 +143,7 @@ async function renderTable() {
       </td>
       <td>
         <div class="title-cell">
+          ${isStale ? '<span title="Applied 14+ days ago" style="margin-right: 4px;">⚠️</span>' : ''}
           ${escapeHtml(job.title)}
           ${job.location ? `<div class="location">${escapeHtml(job.location)}</div>` : ''}
         </div>
@@ -136,6 +161,11 @@ async function renderTable() {
       <td>
         <div class="date-cell">
           ${job.last_seen_at ? formatRelativeTime(job.last_seen_at) : '—'}
+        </div>
+      </td>
+      <td>
+        <div class="tags-cell">
+          ${(job.tags || []).map(tag => `<span class="tag-pill" style="font-size: 10px; padding: 2px 6px; background: #f0f0f0; border-radius: 4px; border: 1px solid #e0e0e0; margin: 2px; display: inline-block;">${escapeHtml(tag)}</span>`).join('')}
         </div>
       </td>
       <td>
@@ -196,12 +226,192 @@ function updateStats() {
 }
 
 /**
+ * Update Analytics Section
+ */
+function updateAnalytics() {
+    // 1. Applications over time
+    const appsChart = document.getElementById('applicationsChart');
+    const timeRangeFilter = document.getElementById('timeRangeFilter');
+    if (!appsChart) return;
+    
+    // Range Days
+    let defaultRange = 14;
+    if (timeRangeFilter) {
+        defaultRange = parseInt(timeRangeFilter.value, 10);
+    }
+    
+    const today = new Date();
+    
+    // We group by "buckets" depending on the range. 
+    // If range > 30, we group by weeks/months so we don't have 365 bars
+    let bucketCount = defaultRange;
+    let daysPerBucket = 1;
+    
+    if (defaultRange === 1) {
+         // 1 Day: 24 bars (1 hour per bar)
+         bucketCount = 24;
+         daysPerBucket = 1 / 24;
+         today.setMinutes(0, 0, 0);
+         today.setHours(today.getHours() + 1); // Round to next hour
+    } else {
+         today.setHours(0,0,0,0);
+    }
+    
+    if (defaultRange > 30 && defaultRange <= 180) {
+         // 6 months timeline: 6 bars (1 month per bar)
+         bucketCount = 6;
+         daysPerBucket = 30.41;
+    } else if (defaultRange === 365) {
+         // 1 year: 12 bars (1 month per bar approx, using 30 days)
+         bucketCount = 12;
+         daysPerBucket = 30.41; // approx
+    } else if (defaultRange > 365) {
+         // forever
+         bucketCount = 12; // cap forever to 12 bars mapping across however far back it goes
+         
+         // Find oldest job to set dynamic daysPerBucket
+         let oldestDate = today;
+         allJobs.forEach(j => {
+             const dt = new Date(j.applied_at || j.created_at || j.updated_at || today);
+             if (dt < oldestDate) oldestDate = dt;
+         });
+         
+         const maxDiffTime = today - oldestDate;
+         let maxDiffDays = Math.ceil(maxDiffTime / (1000 * 60 * 60 * 24));
+         if (maxDiffDays < 14) maxDiffDays = 14;
+         
+         daysPerBucket = maxDiffDays / bucketCount;
+    }
+    
+    // Create buckets
+    const timeBuckets = Array.from({length: bucketCount}, (_, i) => {
+        const endDate = new Date(today.getTime() - (i * daysPerBucket * 24 * 60 * 60 * 1000));
+        return { 
+            index: Math.floor(bucketCount - 1 - i), 
+            endDate: endDate, 
+            count: 0 
+        };
+    }).reverse();
+    
+    // Count jobs
+    allJobs.forEach(job => {
+        // Skip 'interested' jobs as they aren't applications yet
+        if (job.status === 'interested') return;
+        
+        // Fallback for older jobs without explicitly assigned applied_at
+        const dateStr = job.applied_at || job.created_at || job.updated_at;
+        if (!dateStr) return;
+        
+        const eventDate = new Date(dateStr);
+        if (defaultRange > 1) {
+             eventDate.setHours(0,0,0,0);
+        }
+        
+        const diffTime = today - eventDate;
+        const diffDays = diffTime / (1000 * 60 * 60 * 24); // Keep as float for hours support
+        
+        if (diffDays >= 0) {
+            // Find which bucket this belongs to
+            const bucketIndex = bucketCount - 1 - Math.floor(diffDays / daysPerBucket);
+            if (bucketIndex >= 0 && bucketIndex < bucketCount) {
+                timeBuckets[bucketIndex].count++;
+            }
+        }
+    });
+    
+    const maxCount = Math.max(...timeBuckets.map(d => d.count), 1);
+    
+    appsChart.innerHTML = timeBuckets.map(d => {
+        const height = (d.count / maxCount) * 100;
+        let label = '';
+        if (daysPerBucket < 1) {
+             // Hourly label
+             let hour = d.endDate.getHours();
+             let ampm = hour >= 12 ? 'PM' : 'AM';
+             hour = hour % 12;
+             hour = hour ? hour : 12; // 0 becomes 12
+             label = `${hour}${ampm}`;
+        } else if (daysPerBucket === 1) {
+             label = `${d.endDate.getMonth()+1}/${d.endDate.getDate()}`;
+        } else if (daysPerBucket === 7) {
+             label = `${d.endDate.getMonth()+1}/${d.endDate.getDate()}`; // explicit date instead of W1
+        } else {
+             label = d.endDate.toLocaleString('default', { month: 'short' });
+        }
+        
+        return `
+            <div class="bar-wrapper" title="${d.count} applications mapped near ${d.endDate.toLocaleDateString()}">
+                <div class="bar" style="height: ${Math.max(height, 2)}%;"></div>
+                <div class="bar-label">${label}</div>
+            </div>
+        `;
+    }).join('');
+    
+    // Auto-scroll the chart to the far right (most recent)
+    setTimeout(() => {
+        if (appsChart) appsChart.scrollLeft = appsChart.scrollWidth;
+    }, 10);
+
+    // 2. Status Funnel
+    const funnelContainer = document.getElementById('statusFunnel');
+    const states = ['Interested', 'Applied', 'Interviewing', 'Offer', 'Rejected'];
+    const counts = {
+        Interested: allJobs.filter(j => j.status === 'interested').length,
+        Applied: allJobs.filter(j => j.status === 'applied').length,
+        Interviewing: allJobs.filter(j => j.status === 'interviewing').length,
+        Offer: allJobs.filter(j => j.status === 'offer').length,
+        Rejected: allJobs.filter(j => j.status === 'rejected').length
+    };
+    
+    const maxFunnel = Math.max(...Object.values(counts), 1);
+    const colors = {
+        Interested: '#6b7280',
+        Applied: '#3b82f6',
+        Interviewing: '#f59e0b',
+        Offer: '#10b981',
+        Rejected: '#ef4444'
+    };
+
+    funnelContainer.innerHTML = states.map(state => {
+        const width = (counts[state] / maxFunnel) * 100;
+        return `
+            <div class="funnel-row">
+                <div class="funnel-label">${state}</div>
+                <div class="funnel-bar-wrapper">
+                    <div class="funnel-bar" style="width: ${Math.max(width, 10)}%; background: ${colors[state]}">
+                        ${counts[state]}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // 3. Response Rate
+    const responseStats = document.getElementById('responseStats');
+    const totalAppliedOrFurther = counts.Applied + counts.Interviewing + counts.Offer + counts.Rejected;
+    const totalResponses = counts.Interviewing + counts.Offer + counts.Rejected; 
+    const responseRate = totalAppliedOrFurther > 0 ? Math.round((totalResponses / totalAppliedOrFurther) * 100) : 0;
+    
+    responseStats.innerHTML = `
+        <div class="response-rate-circle">
+            ${responseRate}%
+        </div>
+        <div class="response-rate-text">
+            Out of <strong>${totalAppliedOrFurther}</strong> submitted applications,<br>
+            you received <strong>${totalResponses}</strong> responses<br>
+            (Interview, Offer, or Rejection).
+        </div>
+    `;
+}
+
+/**
  * Setup event listeners
  */
 function setupEventListeners() {
     const searchInput = document.getElementById('searchInput');
     const statusFilter = document.getElementById('statusFilter');
     const sortBy = document.getElementById('sortBy');
+    const tagFilter = document.getElementById('tagFilter');
     const exportBtn = document.getElementById('exportBtn');
     const exportJsonBtn = document.getElementById('exportJsonBtn');
     const importJsonBtn = document.getElementById('importJsonBtn');
@@ -210,10 +420,23 @@ function setupEventListeners() {
     const closeModal = document.getElementById('closeModal');
     const cancelEdit = document.getElementById('cancelEdit');
     const toggleThemeBtn = document.getElementById('toggleTheme');
+    const showAnalyticsBtn = document.getElementById('showAnalyticsBtn');
+    const toggleAnalyticsBtn = document.getElementById('toggleAnalyticsBtn');
+    const analyticsContainer = document.getElementById('analyticsContainer');
+    const timeRangeFilter = document.getElementById('timeRangeFilter');
+    
+    // Header settings
+    const dashboardRemindersToggle = document.getElementById('dashboardRemindersToggle');
+    const dashboardSyncToggle = document.getElementById('dashboardSyncToggle');
 
     searchInput.addEventListener('input', applyFiltersAndSort);
     statusFilter.addEventListener('change', applyFiltersAndSort);
     sortBy.addEventListener('change', applyFiltersAndSort);
+    tagFilter.addEventListener('input', applyFiltersAndSort);
+    
+    if (timeRangeFilter) {
+        timeRangeFilter.addEventListener('change', updateAnalytics);
+    }
     exportBtn.addEventListener('click', handleExport);
     exportJsonBtn.addEventListener('click', handleJsonExport);
     importJsonBtn.addEventListener('click', () => importFileInput.click());
@@ -223,7 +446,45 @@ function setupEventListeners() {
     cancelEdit.addEventListener('click', closeEditModal);
     toggleThemeBtn.addEventListener('click', toggleTheme);
 
-    // Close modal on background click
+    // Analytics toggling
+    if (showAnalyticsBtn && toggleAnalyticsBtn && analyticsContainer) {
+        showAnalyticsBtn.addEventListener('click', () => {
+            analyticsContainer.style.display = 'block';
+            showAnalyticsBtn.style.display = 'none';
+        });
+        toggleAnalyticsBtn.addEventListener('click', () => {
+            analyticsContainer.style.display = 'none';
+            showAnalyticsBtn.style.display = 'inline-block';
+        });
+    }
+
+    if (dashboardRemindersToggle) {
+        dashboardRemindersToggle.addEventListener('change', async (e) => {
+            const settings = await StorageService.getSettings();
+            await StorageService.saveSettings({
+                ...settings,
+                reminders_enabled: e.target.checked
+            });
+            // Trigger background to update alarms
+            chrome.runtime.sendMessage({ action: 'checkAlarms' }).catch(() => {});
+        });
+    }
+
+    if (dashboardSyncToggle) {
+        dashboardSyncToggle.addEventListener('change', async (e) => {
+            const settings = await StorageService.getSettings();
+            await StorageService.saveSettings({
+                ...settings,
+                sync_enabled: e.target.checked
+            });
+            if (e.target.checked) {
+                // Initial push to sync when newly enabled
+                StorageService.pushToSync().catch(console.warn);
+            }
+        });
+    }
+
+    // Close modals on background click
     document.getElementById('editModal').addEventListener('click', (e) => {
         if (e.target.id === 'editModal') {
             closeEditModal();
@@ -383,6 +644,7 @@ function showEditModal(job) {
     document.getElementById('editLocation').value = job.location || '';
     document.getElementById('editStatus').value = job.status || 'applied';
     document.getElementById('editNotes').value = job.notes || '';
+    document.getElementById('editTags').value = (job.tags || []).join(', ');
 
     document.getElementById('editModal').style.display = 'flex';
 }
@@ -409,12 +671,16 @@ async function handleEditSubmit(e) {
             return;
         }
 
+        const tagsInput = document.getElementById('editTags').value.trim();
+        const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+
         const updates = {
             company: document.getElementById('editCompany').value.trim(),
             title: document.getElementById('editTitle').value.trim(),
             location: document.getElementById('editLocation').value.trim(),
             status: document.getElementById('editStatus').value,
-            notes: document.getElementById('editNotes').value.trim()
+            notes: document.getElementById('editNotes').value.trim(),
+            tags
         };
 
         // Update applied_at if status changed to 'applied'
@@ -466,6 +732,21 @@ async function toggleTheme() {
 }
 
 /**
+ * Load dashboard settings into UI
+ */
+async function loadDashboardSettings() {
+    const settings = await StorageService.getSettings();
+    const remindersToggle = document.getElementById('dashboardRemindersToggle');
+    if (remindersToggle) {
+        remindersToggle.checked = settings?.reminders_enabled === true; // default false
+    }
+    const syncToggle = document.getElementById('dashboardSyncToggle');
+    if (syncToggle) {
+        syncToggle.checked = settings?.sync_enabled !== false; // default true
+    }
+}
+
+/**
  * Apply theme to dashboard
  */
 function applyTheme(theme) {
@@ -474,15 +755,15 @@ function applyTheme(theme) {
     // Update theme icon
     const themeIcon = document.getElementById('themeIcon');
     if (theme === 'dark') {
-        // Moon icon for dark mode
+        // Sun icon for dark mode (click to switch to light)
         themeIcon.innerHTML = `
-            <path d="M17 13.5C13 13.5 9.5 10 9.5 6C9.5 4.5 10 3 11 2C6.5 2.5 3 6.3 3 11C3 15.9 7.1 20 12 20C16.7 20 20.5 16.5 21 12C20 13 18.5 13.5 17 13.5Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            <circle cx="10" cy="10" r="4" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9L4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         `;
     } else {
-        // Sun icon for light mode
+        // Moon icon for light mode (click to switch to dark)
         themeIcon.innerHTML = `
-            <circle cx="10" cy="10" r="4" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9L4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"/>
         `;
     }
 }

@@ -19,9 +19,19 @@ const STATUS_COLORS = {
  */
 function sendMessage(action, data = {}) {
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action, ...data }, (response) => {
-            resolve(response || null);
-        });
+        try {
+            if (!chrome.runtime || !chrome.runtime.sendMessage) {
+                return resolve(null);
+            }
+            chrome.runtime.sendMessage({ action, ...data }, (response) => {
+                if (chrome.runtime.lastError) {
+                    // Swallow connection errors
+                }
+                resolve(response || null);
+            });
+        } catch (e) {
+            resolve(null); // Context invalidated
+        }
     });
 }
 
