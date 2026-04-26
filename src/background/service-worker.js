@@ -265,7 +265,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Listen for extension installation
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason === 'install') {
         // Open dashboard on first install
         chrome.tabs.create({
@@ -273,11 +273,31 @@ chrome.runtime.onInstalled.addListener((details) => {
         });
     }
     syncAlarms(); // Setup alarms initially
+    await StorageService.migratePageStorage();
+
+    // On install or update, push local data to sync and pull remote data
+    try {
+        await StorageService.pushToSync();
+        console.log('Job Tracker: Pushed local data to sync on install/update');
+        const pulled = await StorageService.pullFromSync();
+        if (pulled) console.log('Job Tracker: Pulled remote data on install/update');
+    } catch (e) {
+        console.warn('Job Tracker: Initial sync failed:', e);
+    }
 });
 
-// Startup logic
-chrome.runtime.onStartup.addListener(() => {
+// Startup logic — pull from sync in case another device pushed changes
+chrome.runtime.onStartup.addListener(async () => {
     syncAlarms();
+    try {
+        const pulled = await StorageService.pullFromSync();
+        if (pulled) {
+            console.log('Job Tracker: Pulled remote data on startup');
+            chrome.runtime.sendMessage({ action: 'syncUpdated' }).catch(() => {});
+        }
+    } catch (e) {
+        console.warn('Job Tracker: Startup sync pull failed:', e);
+    }
 });
 
 // --- Follow-up Reminders Logic ---
