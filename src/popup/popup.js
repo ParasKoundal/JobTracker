@@ -9,6 +9,7 @@ import { capitalizeStatus } from '../utils/helpers.js';
 
 let currentTab = null;
 let existingJob = null;
+let capturedPageHTML = null; // Pre-captured on popup open while activeTab is fresh
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
@@ -19,6 +20,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Get current tab
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         currentTab = tab;
+
+        // Pre-capture page HTML immediately while activeTab permission is fresh
+        capturedPageHTML = await capturePageHTML(tab.id);
 
         // Check if this job is already tracked
         existingJob = await StorageService.findJobByURL(tab.url);
@@ -38,6 +42,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Error initializing popup:', error);
     }
 });
+
+/**
+ * Pre-capture page HTML using multiple methods
+ */
+async function capturePageHTML(tabId) {
+    // Attempt 1: chrome.scripting.executeScript (needs activeTab, freshest right after popup opens)
+    try {
+        const results = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => document.documentElement.outerHTML
+        });
+        if (results && results[0] && results[0].result) {
+            return results[0].result;
+        }
+    } catch (err) {
+        console.warn('Job Tracker: scripting.executeScript failed:', err.message);
+    }
+
+    // Attempt 2: fallback via content script message
+    try {
+        const response = await chrome.tabs.sendMessage(tabId, { action: 'capturePageHTML' });
+        if (response && response.html) {
+            return response.html;
+        }
+    } catch (err2) {
+        console.warn('Job Tracker: content script fallback failed:', err2.message);
+    }
+
+    return null;
+}
 
 /**
  * Show existing job status
@@ -212,41 +246,13 @@ async function handleFormSubmit(e) {
         // Save job
         await StorageService.saveJob(jobData);
 
-        // Save page HTML if toggle is on
+        // Save pre-captured page HTML if toggle is on
         const savePageToggle = document.getElementById('savePageToggle');
         let pageSaveWarning = null;
         if (savePageToggle.checked) {
-            let html = null;
-
-            // Attempt 1: chrome.scripting.executeScript
-            try {
-                const results = await chrome.scripting.executeScript({
-                    target: { tabId: currentTab.id },
-                    func: () => document.documentElement.outerHTML
-                });
-                if (results && results[0] && results[0].result) {
-                    html = results[0].result;
-                }
-            } catch (err) {
-                console.warn('Job Tracker: scripting.executeScript failed:', err.message);
-            }
-
-            // Attempt 2: fallback via content script message
-            if (!html) {
+            if (capturedPageHTML) {
                 try {
-                    const response = await chrome.tabs.sendMessage(currentTab.id, { action: 'capturePageHTML' });
-                    if (response && response.html) {
-                        html = response.html;
-                    }
-                } catch (err2) {
-                    console.warn('Job Tracker: content script fallback failed:', err2.message);
-                }
-            }
-
-            // Save if we got HTML
-            if (html) {
-                try {
-                    await StorageService.savePageHTML(jobKey, html);
+                    await StorageService.savePageHTML(jobKey, capturedPageHTML);
                 } catch (err) {
                     console.warn('Job Tracker: storage write failed:', err.message);
                     pageSaveWarning = err?.message?.includes('QUOTA') ? 'Storage full — page not saved.' : 'Could not save page.';
