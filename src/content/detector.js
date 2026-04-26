@@ -1,27 +1,39 @@
 /**
- * Content script for detecting job pages and showing revisit banners
+ * Content script for detecting job pages and showing revisit banners.
+ * 
+ * NOTE: Content scripts cannot use ES module imports. All data operations
+ * are done via messaging to the background service worker.
  */
 
-import { StorageService } from '../utils/storage.js';
-import { canonicalizeURL } from '../utils/urlCanonicalizer.js';
-import { formatDate, formatRelativeTime } from '../utils/dateFormatter.js';
-import { DEFAULT_STATUS_COLORS, isLightColor, lightenColor } from '../utils/helpers.js';
+// Status colors (inline to avoid imports)
+const STATUS_COLORS = {
+    interested: '#6b7280',
+    applied: '#3b82f6',
+    interviewing: '#f59e0b',
+    offer: '#10b981',
+    rejected: '#ef4444'
+};
+
+/**
+ * Send a message to the background service worker and get a response
+ */
+function sendMessage(action, data = {}) {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action, ...data }, (response) => {
+            resolve(response || null);
+        });
+    });
+}
 
 // Initialize on page load
 (async function init() {
     try {
-        // Check if current page matches a tracked job
         const currentUrl = window.location.href;
-        const job = await StorageService.findJobByURL(currentUrl);
+        const response = await sendMessage('getJobForURL', { url: currentUrl });
 
-        if (job) {
-            // Update last seen timestamp
-            await StorageService.updateLastSeen(job.job_key);
-
-            // Show minimal corner marker
-            showCornerMarker(job);
+        if (response && response.job) {
+            showCornerMarker(response.job, response.theme);
         } else {
-            // Show minimal track button
             showTrackButton();
         }
     } catch (error) {
@@ -31,20 +43,16 @@ import { DEFAULT_STATUS_COLORS, isLightColor, lightenColor } from '../utils/help
 
 /**
  * Show prominent status badge for tracked job
- * @param {Object} job - Job data
  */
-async function showCornerMarker(job) {
+function showCornerMarker(job, theme) {
     // Remove existing badge if it exists
     const existingBadge = document.getElementById('job-tracker-status-badge');
     if (existingBadge) {
         existingBadge.remove();
     }
 
-    // Get custom colors and theme from storage
-    const settings = await StorageService.getSettings();
-    const colors = settings?.statusColors || DEFAULT_STATUS_COLORS;
-    const statusColor = colors[job.status] || DEFAULT_STATUS_COLORS[job.status];
-    const theme = settings?.theme || 'light';
+    const statusColor = STATUS_COLORS[job.status] || STATUS_COLORS.applied;
+    theme = theme || 'light';
 
     // Create minimalist status badge
     const badge = document.createElement('div');
@@ -77,8 +85,7 @@ async function showCornerMarker(job) {
 /**
  * Show floating track button
  */
-async function showTrackButton() {
-    // Don't show if button already exists
+function showTrackButton() {
     if (document.getElementById('job-tracker-float-btn')) {
         return;
     }
@@ -97,7 +104,6 @@ async function showTrackButton() {
     document.body.appendChild(button);
 
     button.addEventListener('click', () => {
-        // Open extension popup (will trigger popup to load current page)
         chrome.runtime.sendMessage({ action: 'openPopup' });
     });
 }
@@ -105,11 +111,10 @@ async function showTrackButton() {
 // Listen for page visibility changes (when user comes back to tab)
 document.addEventListener('visibilitychange', async () => {
     if (!document.hidden) {
-        // Page became visible again, check if it's a tracked job
         try {
-            const job = await StorageService.findJobByURL(window.location.href);
-            if (job) {
-                showCornerMarker(job);
+            const response = await sendMessage('getJobForURL', { url: window.location.href });
+            if (response && response.job) {
+                showCornerMarker(response.job, response.theme);
             }
         } catch (error) {
             console.error('Job Tracker: Error checking job on visibility change', error);
@@ -126,22 +131,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.action === 'jobUpdated') {
-        // Refresh badge if job was updated
         const existingBadge = document.getElementById('job-tracker-status-badge');
         if (existingBadge) existingBadge.remove();
 
-        StorageService.findJobByURL(window.location.href).then(job => {
-            if (job) showCornerMarker(job);
+        sendMessage('getJobForURL', { url: window.location.href }).then(response => {
+            if (response && response.job) showCornerMarker(response.job, response.theme);
         });
     }
 
     if (message.action === 'showMarker' && message.job) {
-        // Show badge triggered by navigation (SPA support)
-        // Remove existing badge first
         const existingBadge = document.getElementById('job-tracker-status-badge');
         if (existingBadge) existingBadge.remove();
 
-        // Remove track button if exists
         const trackBtn = document.getElementById('job-tracker-float-btn');
         if (trackBtn) trackBtn.remove();
 
@@ -149,7 +150,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.action === 'themeChanged') {
-        // Update badge theme
         const existingBadge = document.getElementById('job-tracker-status-badge');
         if (existingBadge) {
             existingBadge.dataset.theme = message.theme;

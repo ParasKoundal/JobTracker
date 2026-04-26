@@ -238,6 +238,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (message.action === 'getJobForURL') {
+        // Content script asks for job data (can't import storage directly)
+        (async () => {
+            try {
+                const { StorageService } = await import('../utils/storage.js');
+                const job = await StorageService.findJobByURL(message.url);
+                if (job) {
+                    await StorageService.updateLastSeen(job.job_key);
+                    const settings = await StorageService.getSettings();
+                    sendResponse({ job, theme: settings?.theme || 'light' });
+                } else {
+                    sendResponse({ job: null });
+                }
+            } catch (e) {
+                console.error('Error in getJobForURL:', e);
+                sendResponse({ job: null });
+            }
+        })();
+        return true; // keep message channel open for async response
+    }
+
     return false;
 });
 
