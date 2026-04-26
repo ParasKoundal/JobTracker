@@ -135,33 +135,70 @@ async function viewSavedPage(jobKey) {
  */
 async function autoFillJobDetails() {
     try {
-        // Try to extract job details from page title and URL
-        const source = detectSource(currentTab.url);
-
-        // Basic extraction from page title
-        const title = currentTab.title || '';
-
-        // Common patterns in job posting titles
-        // "Software Engineer - Google - LinkedIn"
-        // "Product Manager | Apple | San Francisco"
-
         let company = '';
         let jobTitle = '';
 
-        // Try to parse title
-        const parts = title.split(/[-|•]/);
-        if (parts.length >= 2) {
-            jobTitle = parts[0].trim();
-            company = parts[1].trim();
-        }
+        // Extract base domain to serve as extreme fallback company name (e.g. tower-research.com -> Tower-research)
+        let domainCompany = '';
+        try {
+            const host = new URL(currentTab.url).hostname.replace('www.', '');
+            domainCompany = host.split('.')[0];
+            domainCompany = domainCompany.charAt(0).toUpperCase() + domainCompany.slice(1);
+        } catch(e) {}
 
-        // Update form if we found something
-        if (company) {
-            document.getElementById('company').value = company;
+        // Inject script to pull strictly normalized job classes (Greenhouse/Lever/Workday) or standard H1
+        const results = await chrome.scripting.executeScript({
+            target: { tabId: currentTab.id },
+            func: () => {
+                const titleNode = document.querySelector('h1, .app-title, .posting-headline h2');
+                const ogTitle = document.querySelector('meta[property="og:title"]');
+                const ogSiteName = document.querySelector('meta[property="og:site_name"]');
+                return {
+                    exactTitle: titleNode ? titleNode.innerText.trim() : '',
+                    ogTitle: ogTitle ? ogTitle.content : '',
+                    ogSiteName: ogSiteName ? ogSiteName.content : '',
+                    pageTitle: document.title || ''
+                };
+            }
+        });
+
+        if (results && results[0] && results[0].result) {
+            const { exactTitle, ogTitle, ogSiteName, pageTitle } = results[0].result;
+            
+            // Override domainCompany completely if the site natively broadcasts its organization's name!
+            if (ogSiteName && ogSiteName.length < 50) {
+                 domainCompany = ogSiteName;
+            }
+            
+            // Heavily prioritize Semantic HTML and explicit Open-Graph tags over raw page title splits
+            const bestTargetTitle = (exactTitle && exactTitle.length > 2 && exactTitle.length < 100) 
+                 ? exactTitle 
+                 : (ogTitle || pageTitle);
+            
+            const parts = bestTargetTitle.split(/[-|•|:]/).map(p => p.trim()).filter(Boolean);
+            
+            if (parts.length >= 2) {
+                jobTitle = parts[0];
+                company = parts[1];
+                
+                // If split produced a generic path slug like 'positions', 'careers', revert to the Domain
+                if (company.toLowerCase().includes('position') || company.toLowerCase().includes('career')) {
+                    company = domainCompany;
+                }
+            } else if (parts.length === 1) {
+                jobTitle = parts[0];
+                company = domainCompany;
+            }
         }
-        if (jobTitle) {
-            document.getElementById('title').value = jobTitle;
-        }
+        
+        // Final sanity checks on weird empty splits
+        if (!company || company.toLowerCase() === 'open') company = domainCompany;
+        if (jobTitle.toLowerCase() === 'open' || jobTitle.toLowerCase() === 'open positions') jobTitle = '';
+
+        // Update form if we successfully found data
+        if (company) document.getElementById('company').value = company;
+        if (jobTitle) document.getElementById('title').value = jobTitle;
+        
     } catch (error) {
         console.error('Error auto-filling details:', error);
     }

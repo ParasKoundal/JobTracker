@@ -12,7 +12,7 @@
 ## ✨ Features
 Job Tracker is built on **Swiss Minimalism**—zero clutter, sharp geometry, and a distraction-free interface. We believe tracking applications should take less than a second, and you shouldn't have to surrender your data to a third-party server to do it.
 
-- **One-Click Tracking**: Hit the extension icon on any job posting and you're done. 
+- **One-Click Tracking**: Hit the extension icon and let the intelligent Autofill engine instantly parse the target company and job title, or input it yourself.
 - **Smart URL Matching**: We automatically detect if you stumble across a job you've already locally saved.
 - **Offline Page Backup**: Takes a full offline snapshot of the job description in case the company deletes the remote listing.
 - **Insightful Analytics**: View application timelines, status funnels, and response rates natively in your dashboard.

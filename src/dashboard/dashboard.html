@@ -202,18 +202,15 @@
 
                 <div class="form-group">
                     <label for="editCompany">Company *</label>
-                    <input type="text" id="editCompany" required>
+                    <input type="text" id="editCompany" name="company" required autocomplete="organization">
                 </div>
 
                 <div class="form-group">
                     <label for="editTitle">Job Title *</label>
-                    <input type="text" id="editTitle" required>
+                    <input type="text" id="editTitle" name="title" required autocomplete="organization-title">
                 </div>
 
-                <div class="form-group">
-                    <label for="editLocation">Location</label>
-                    <input type="text" id="editLocation">
-                </div>
+
 
                 <div class="form-group">
                     <label for="editStatus">Status *</label>
@@ -234,6 +231,11 @@
                 <div class="form-group">
                     <label for="editTags">Tags</label>
                     <input type="text" id="editTags" placeholder="e.g., remote, startup, $150k+">
+                </div>
+
+                <div class="form-group">
+                    <label for="editLocation">Location</label>
+                    <input type="text" id="editLocation" name="location" autocomplete="address-level2">
                 </div>
 
                 <div class="form-actions">
