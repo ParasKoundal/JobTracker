@@ -4,6 +4,7 @@
  */
 
 import { DEFAULT_STATUS_COLORS } from '../utils/helpers.js';
+import { StorageService } from '../utils/storage.js';
 
 // Cache for generated icon data URLs
 const iconCache = new Map();
@@ -87,7 +88,6 @@ async function updateIconForStatus(status, tabId = null) {
         console.log('updateIconForStatus called with:', status, 'tabId:', tabId);
 
         // Get custom colors from storage
-        const { StorageService } = await import('../utils/storage.js');
         const settings = await StorageService.getSettings();
         const colors = settings?.statusColors || DEFAULT_STATUS_COLORS;
         const statusColor = colors[status] || DEFAULT_STATUS_COLORS.applied;
@@ -146,9 +146,6 @@ async function updateIconForStatus(status, tabId = null) {
  */
 async function handleTabUpdate(tabId, url) {
     try {
-        // Import storage service dynamically
-        const { StorageService } = await import('../utils/storage.js');
-
         // Check if this URL matches a tracked job
         const job = await StorageService.findJobByURL(url);
 
@@ -242,7 +239,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Content script asks for job data (can't import storage directly)
         (async () => {
             try {
-                const { StorageService } = await import('../utils/storage.js');
                 const job = await StorageService.findJobByURL(message.url);
                 if (job) {
                     await StorageService.updateLastSeen(job.job_key);

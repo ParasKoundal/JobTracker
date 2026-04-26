@@ -2,6 +2,7 @@
  * Storage service for managing job applications
  * Uses Chrome Storage API
  */
+import { canonicalizeURL } from './urlCanonicalizer.js';
 
 const STORAGE_KEY = 'job_tracker_jobs';
 const PAGE_KEY_PREFIX = 'job_page_';
@@ -130,7 +131,6 @@ export const StorageService = {
    * @returns {Promise<Object|null>} Matching job or null
    */
   async findJobByURL(url) {
-    const { canonicalizeURL } = await import('./urlCanonicalizer.js');
     const canonicalUrl = canonicalizeURL(url);
 
     const jobs = await this.getAllJobsArray();
